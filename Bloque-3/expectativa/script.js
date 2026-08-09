@@ -17,6 +17,8 @@ const bandeja = document.getElementById('bandeja');
 const contadorEl = document.getElementById('contador');
 
 const TAMAÑO_FIGURA = 65;
+// Agregar cerca de las otras constantes
+const SOLAPE_VISUAL = 10; // píxeles que cada pieza se "hunde" en la anterior, tapa los huecos de puntas/curvas
 
 // --- Límite de objetos: aleatorio entre 10 y 15, definido al cargar ---
 const LIMITE_MAXIMO = Math.floor(Math.random() * (15 - 10 + 1)) + 10;
@@ -94,17 +96,12 @@ document.addEventListener('mousemove', (e) => {
 
 // --- Apilado: cae con física real, un atrapador la intercepta y la fija ---
 
-let alturaAcumulada = 0;
 const MARGEN_INFERIOR = 60; // debe coincidir con el grosor del suelo en crearLimites
 const BASE_Y = alto - MARGEN_INFERIOR;
 
+let topeY = BASE_Y; // borde superior real de la pila actual (se actualiza según la geometría de cada pieza)
 let piezaCayendo = null;
 let timeoutSeguridad = null;
-
-function alturaDeFigura(tipo, tamaño) {
-  if (tipo === 'linea') return 8;
-  return tamaño;
-}
 
 // Atrapador invisible: sensor que se ubica justo arriba de la última pieza apilada
 const atrapador = Bodies.rectangle(ancho / 2, BASE_Y, TAMAÑO_FIGURA * 1.8, 12, {
@@ -115,7 +112,7 @@ const atrapador = Bodies.rectangle(ancho / 2, BASE_Y, TAMAÑO_FIGURA * 1.8, 12, 
 World.add(engine.world, atrapador);
 
 function actualizarAtrapador() {
-  Body.setPosition(atrapador, { x: xUltimaPosicion, y: BASE_Y - alturaAcumulada });
+  Body.setPosition(atrapador, { x: xUltimaPosicion, y: topeY });
 }
 
 // Suelta la pieza desde arriba, con física real (puede tambalear, generar tensión)
@@ -130,24 +127,26 @@ function iniciarCaida(tipo, xInicial) {
   }, 1500);
 }
 
-// Fija la pieza en su posición exacta de la torre y la vuelve estática
 function asentarFigura(cuerpo) {
   clearTimeout(timeoutSeguridad);
-  const alturaFigura = alturaDeFigura(cuerpo.tipoFigura, TAMAÑO_FIGURA);
-  const yObjetivo = BASE_Y - alturaAcumulada - alturaFigura / 2;
+
+  Body.setAngle(cuerpo, 0);
+  const offsetArriba = cuerpo.position.y - cuerpo.bounds.min.y;
+  const offsetAbajo = cuerpo.bounds.max.y - cuerpo.position.y;
+
+  const yObjetivo = topeY - offsetAbajo + SOLAPE_VISUAL; // ← se resta el hueco, se hunde un poco
 
   const xCaida = cuerpo.position.x;
   const desvio = Math.max(-OFFSET_MAXIMO, Math.min(OFFSET_MAXIMO, xCaida - xUltimaPosicion));
   const xObjetivo = xUltimaPosicion + desvio;
 
   Body.setPosition(cuerpo, { x: xObjetivo, y: yObjetivo });
-  Body.setAngle(cuerpo, 0); // la endereza al asentarse, sin importar cómo cayó girando
   Body.setVelocity(cuerpo, { x: 0, y: 0 });
   Body.setAngularVelocity(cuerpo, 0);
   Body.setStatic(cuerpo, true);
 
-  cuerpo.posicionReposo = { x: xObjetivo, y: yObjetivo }; // referencia fija para el balanceo rígido
-  alturaAcumulada += alturaFigura;
+  cuerpo.posicionReposo = { x: xObjetivo, y: yObjetivo };
+  topeY = yObjetivo - offsetArriba + SOLAPE_VISUAL; // ← también acá, para la próxima pieza
   xUltimaPosicion = xObjetivo;
   figurasApiladas.push(cuerpo);
 
@@ -165,18 +164,17 @@ Events.on(engine, 'collisionStart', (evento) => {
   });
 });
 
+// Área de suelta: ahora todo el canvas es válido, así se puede soltar desde arriba también
 document.addEventListener('mouseup', (e) => {
   if (!elementoArrastrado) return;
 
   try {
-    const zonaGuia = document.getElementById('zona-guia');
-    const rectZona = zonaGuia.getBoundingClientRect();
     const rectCanvas = canvasContenedor.getBoundingClientRect();
-    const dentroDeLaZona =
-      e.clientX >= rectZona.left && e.clientX <= rectZona.right &&
-      e.clientY >= rectZona.top && e.clientY <= rectZona.bottom;
+    const dentroDelCanvas =
+      e.clientX >= rectCanvas.left && e.clientX <= rectCanvas.right &&
+      e.clientY >= rectCanvas.top && e.clientY <= rectCanvas.bottom;
 
-    if (dentroDeLaZona && !piezaCayendo && figurasApiladas.length < LIMITE_MAXIMO) {
+    if (dentroDelCanvas && !piezaCayendo && figurasApiladas.length < LIMITE_MAXIMO) {
       const xDrop = e.clientX - rectCanvas.left; // el punto donde soltó define desde dónde cae
       iniciarCaida(tipoArrastrado, xDrop);
     }
@@ -203,7 +201,6 @@ Events.on(engine, 'beforeUpdate', () => {
     const dx = cuerpo.posicionReposo.x - PIVOTE.x;
     const dy = cuerpo.posicionReposo.y - PIVOTE.y;
 
-    // Rotamos cada pieza alrededor del MISMO pivote, no de su propio centro
     const xRotado = PIVOTE.x + dx * cos - dy * sin;
     const yRotado = PIVOTE.y + dx * sin + dy * cos;
 
