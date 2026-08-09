@@ -1,0 +1,46 @@
+#canvas-expectativa canvas {
+  display: block;
+}
+
+/* style.css — agregar */
+#zona-guia {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 140px;
+  height: 70%;
+  border-left: 1px dashed var(--color-borde);
+  border-right: 1px dashed var(--color-borde);
+  pointer-events: none; /* para que no interfiera con el drag */
+  z-index: 1;
+}
+
+/* style.css — reemplazar el bloque de #bandeja */
+#bandeja {
+  position: fixed;
+  top: 20px;
+  left: 0;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  z-index: 10;
+}
+
+.figura-arrastrable {
+  font-size: 48px; /* antes 32px — más grandes, acorde a 10-15 objetos en total */
+  color: var(--color-figura-primaria);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+#contador {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  color: var(--color-figura-secundaria);
+  font-size: 14px;
+  z-index: 10;
+}

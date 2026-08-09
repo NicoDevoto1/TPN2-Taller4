@@ -1,0 +1,33 @@
+/* variables.css — identidad visual compartida por las 9 interfaces */
+:root {
+  /* Paleta cromática general del sistema */
+  --color-fondo: #0e0e10;
+  --color-figura-primaria: #f2f2f2;
+  --color-figura-secundaria: #8a8a8f;
+  --color-acento: #d94f30;
+
+  /* Clave tonal: contraste alto, bajo-clave (fondo oscuro) */
+  --color-borde: rgba(255, 255, 255, 0.15);
+
+  /* Tipografía */
+  --font-sistema: 'Helvetica Neue', Arial, sans-serif;
+}
+
+body {
+  margin: 0;
+  background: var(--color-fondo);
+  font-family: var(--font-sistema);
+  color: var(--color-figura-primaria);
+  overflow: hidden;
+}
+
+/* Marco de encierro común a las 9 interfaces */
+.contenedor-interfaz {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-borde);
+  box-sizing: border-box;
+}
