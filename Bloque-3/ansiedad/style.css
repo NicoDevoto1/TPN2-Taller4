@@ -1,0 +1,68 @@
+/* Bloque-3/ansiedad/style.css */
+#canvas-ansiedad {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+#zona-objetivo {
+  position: absolute;
+  width: 100px;
+  height: 100px;
+  border: 1px dashed var(--color-borde);
+  border-radius: 8px;
+  pointer-events: none;
+  transition: border-color 0.2s;
+}
+
+#zona-objetivo.activa {
+  border-color: var(--color-acento);
+}
+
+.obstaculo {
+  position: absolute;
+  background: var(--color-figura-secundaria);
+  opacity: 0.3;
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+#figura-ansiedad {
+  position: absolute;
+  width: 65px;
+  height: 65px;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-drag: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 48px;
+  color: var(--color-figura-primaria);
+  touch-action: none;
+  z-index: 2;
+}
+
+#contador {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: var(--color-figura-secundaria);
+  font-size: 14px;
+  z-index: 5;
+}
+
+/* style.css — agregar estas 3 clases nuevas */
+.obstaculo-circulo {
+  border-radius: 50%;
+}
+
+.obstaculo-triangulo {
+  clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+}
+
+.obstaculo-linea {
+  border-radius: 2px;
+}
