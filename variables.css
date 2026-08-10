@@ -31,3 +31,51 @@ body {
   border: 1px solid var(--color-borde);
   box-sizing: border-box;
 }
+
+.mapa-sistema {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 60px 24px;
+}
+
+.mapa-sistema h1 {
+  font-size: 22px;
+  font-weight: 400;
+  color: var(--color-figura-secundaria);
+  margin-bottom: 48px;
+  line-height: 1.4;
+}
+
+.bloque {
+  margin-bottom: 40px;
+  padding-bottom: 40px;
+  border-bottom: 1px solid var(--color-borde);
+}
+
+.bloque h2 {
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--color-figura-secundaria);
+  margin-bottom: 16px;
+}
+
+.lista-interfaces {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.lista-interfaces a {
+  color: var(--color-figura-primaria);
+  text-decoration: none;
+  font-size: 20px;
+  padding: 12px 20px;
+  border: 1px solid var(--color-borde);
+  transition: background 0.2s;
+}
+
+.lista-interfaces a:hover {
+  background: var(--color-acento);
+  border-color: var(--color-acento);
+}
