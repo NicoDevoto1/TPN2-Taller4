@@ -1,24 +1,18 @@
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
     <meta charset="UTF-8">
     <title>Expectativa</title>
     <link rel="stylesheet" href="../../variables.css">
     <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
-    <div id="canvas-expectativa" class="contenedor-interfaz"></div>
-    <!-- index.html — agregar dentro de #canvas-expectativa, y el contador -->
-    <div id="bandeja"></div>
-    <div id="contador"></div>
-    <div id="canvas-expectativa" class="contenedor-interfaz">
-        <div id="zona-guia"></div>
-    </div>
+    <!-- Un único contenedor para la interfaz -->
+    <div id="contenedor-expectativa" class="contenedor-interfaz"></div>
+    <div id="overlay-dolor" style="position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 10; background-color: rgba(20, 0, 0, 0);"></div>
+
     <script src="../../libs/matter.min.js"></script>
     <script src="../../general/engine-helpers.js"></script>
     <script src="script.js"></script>
 </body>
-
 </html>
