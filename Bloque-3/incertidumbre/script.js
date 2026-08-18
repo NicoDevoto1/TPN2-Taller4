@@ -4,7 +4,6 @@ const capaMapa = document.getElementById('capaMapa');
 const capaOscuridad = document.getElementById('capaOscuridad');
 const ctxMapa = capaMapa.getContext('2d');
 const ctxOscuridad = capaOscuridad.getContext('2d');
-capaOscuridad.draggable = false;
 
 const ancho = window.innerWidth;
 const alto = window.innerHeight;
@@ -13,143 +12,191 @@ capaMapa.height = capaOscuridad.height = alto;
 
 const colorPrimario = getComputedStyle(document.documentElement).getPropertyValue('--color-figura-primaria').trim() || '#f2f2f2';
 const colorAcento = getComputedStyle(document.documentElement).getPropertyValue('--color-acento').trim() || '#d94f30';
+const colorFondo = getComputedStyle(document.documentElement).getPropertyValue('--color-fondo').trim() || '#0e0e10';
 
-// --- Configuración del laberinto ---
-const FILAS = 6;
-const COLUMNAS = 6;
-const TAMAÑO_TABLERO = Math.min(ancho, alto) * 0.7;
-const celdaSize = TAMAÑO_TABLERO / FILAS;
-const origenX = (ancho - celdaSize * COLUMNAS) / 2;
-const origenY = (alto - celdaSize * FILAS) / 2;
+const RADIO_LUZ = 180;
+const TAMAÑO_TOKEN = 26;
+const RADIO_TOKEN = TAMAÑO_TOKEN / 2;
+const TIPOS_TOKEN = ['circulo', 'cuadrado', 'triangulo']; // la línea queda reservada para los obstáculos
 
-const RADIO_LUZ = celdaSize * 1.3;
-const TAMAÑO_TOKEN = celdaSize * 0.4;
-const TIPOS_TOKEN = ['circulo', 'cuadrado', 'triangulo']; // la línea queda reservada para los muros
+const CANTIDAD_OBSTACULOS = 18;
+const LARGO_MIN_OBSTACULO = 60;
+const LARGO_MAX_OBSTACULO = 160;
+const MARGEN_BORDE = 40;
 
 const RONDAS_TOTALES = 5;
 let rondaActual = 1;
-let maze, meta, token;
+let metaAlcanzada = false;
+let obstaculos = [];
+let meta, token;
 let arrastrando = false;
+let offsetAgarre = { x: 0, y: 0 };
+let posAnteriorToken = { x: 0, y: 0 };
+let radioLuzVisual = RADIO_LUZ; // Empieza con el valor original (150)
 
-// --- Generación del laberinto (recursive backtracker) ---
-function generarLaberinto() {
-  maze = [];
-  for (let f = 0; f < FILAS; f++) {
-    const fila = [];
-    for (let c = 0; c < COLUMNAS; c++) {
-      fila.push({ arriba: true, derecha: true, abajo: true, izquierda: true, visitada: false });
-    }
-    maze.push(fila);
+// -- Definir límites para el radio de luz --
+const RADIO_LUZ_MAX = 200; // Radio completo al estar quieto
+const RADIO_LUZ_MIN = 60;  // Radio castigado por velocidad rápida
+const UMBRAL_VELOCIDAD = 15; // Velocidad a partir de la cual empieza el castigo
+
+// --- Generación de un campo de obstáculos dispersos (no un laberinto estructurado) ---
+// Reemplaza tu función generarObstaculos con esta:
+function generarObstaculos(puntoExclusion) {
+  obstaculos = [];
+  let intentos = 0;
+
+  while (obstaculos.length < CANTIDAD_OBSTACULOS && intentos < CANTIDAD_OBSTACULOS * 20) {
+    intentos++;
+    const cx = MARGEN_BORDE + Math.random() * (ancho - MARGEN_BORDE * 2);
+    const cy = MARGEN_BORDE + Math.random() * (alto - MARGEN_BORDE * 2);
+    const largo = LARGO_MIN_OBSTACULO + Math.random() * (LARGO_MAX_OBSTACULO - LARGO_MIN_OBSTACULO);
+    const angulo = Math.random() * Math.PI * 2;
+    // Nueva propiedad: velocidad de rotación aleatoria (algunas giran a un lado, otras al otro)
+    const velRotacion = (Math.random() - 0.5) * 0.02; 
+
+    // Calculamos los extremos basados en el centro (cx, cy)
+    const x1 = cx + Math.cos(angulo) * (largo / 2);
+    const y1 = cy + Math.sin(angulo) * (largo / 2);
+    const x2 = cx - Math.cos(angulo) * (largo / 2);
+    const y2 = cy - Math.sin(angulo) * (largo / 2);
+
+    const distAlInicio = Math.hypot(puntoExclusion.x - cx, puntoExclusion.y - cy);
+    if (distAlInicio < RADIO_LUZ) continue;
+
+    obstaculos.push({ cx, cy, largo, angulo, velRotacion, x1, y1, x2, y2 });
   }
-
-  const pila = [{ f: 0, c: 0 }];
-  maze[0][0].visitada = true;
-
-  while (pila.length > 0) {
-    const actual = pila[pila.length - 1];
-    const vecinos = obtenerVecinosNoVisitados(actual.f, actual.c);
-
-    if (vecinos.length === 0) {
-      pila.pop();
-      continue;
-    }
-
-    const siguiente = vecinos[Math.floor(Math.random() * vecinos.length)];
-    derribarPared(actual, siguiente);
-    maze[siguiente.f][siguiente.c].visitada = true;
-    pila.push(siguiente);
-  }
 }
 
-function obtenerVecinosNoVisitados(f, c) {
-  const vecinos = [];
-  if (f > 0 && !maze[f - 1][c].visitada) vecinos.push({ f: f - 1, c, dir: 'arriba' });
-  if (c < COLUMNAS - 1 && !maze[f][c + 1].visitada) vecinos.push({ f, c: c + 1, dir: 'derecha' });
-  if (f < FILAS - 1 && !maze[f + 1][c].visitada) vecinos.push({ f: f + 1, c, dir: 'abajo' });
-  if (c > 0 && !maze[f][c - 1].visitada) vecinos.push({ f, c: c - 1, dir: 'izquierda' });
-  return vecinos;
+// --- Geometría: distancia de un punto a un segmento (para colisión y para el excluir zona inicial) ---
+function distanciaPuntoSegmento(px, py, x1, y1, x2, y2) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const largo2 = dx * dx + dy * dy;
+  let t = largo2 === 0 ? 0 : ((px - x1) * dx + (py - y1) * dy) / largo2;
+  t = Math.max(0, Math.min(1, t));
+  const cx = x1 + t * dx;
+  const cy = y1 + t * dy;
+  return Math.hypot(px - cx, py - cy);
 }
 
-function derribarPared(actual, siguiente) {
-  const opuestas = { arriba: 'abajo', derecha: 'izquierda', abajo: 'arriba', izquierda: 'derecha' };
-  maze[actual.f][actual.c][siguiente.dir] = false;
-  maze[siguiente.f][siguiente.c][opuestas[siguiente.dir]] = false;
+function colisionaConObstaculos(x, y) {
+  return obstaculos.some((o) => distanciaPuntoSegmento(x, y, o.x1, o.y1, o.x2, o.y2) < RADIO_TOKEN + 4);
 }
 
-// --- Utilidades de grilla ---
-function celdaCentro(f, c) {
-  return {
-    x: origenX + c * celdaSize + celdaSize / 2,
-    y: origenY + f * celdaSize + celdaSize / 2
-  };
-}
-
-function elegirCeldaAlAzar() {
-  return { f: Math.floor(Math.random() * FILAS), c: Math.floor(Math.random() * COLUMNAS) };
-}
-
-// --- Dibujo del laberinto (capa de abajo, siempre completo) ---
-function dibujarLaberinto() {
+// --- Dibujo del campo (capa de abajo, siempre completo) ---
+function dibujarCampo() {
   ctxMapa.clearRect(0, 0, ancho, alto);
   ctxMapa.strokeStyle = colorPrimario;
   ctxMapa.lineWidth = 3;
+  ctxMapa.lineCap = 'round';
 
-  for (let f = 0; f < FILAS; f++) {
-    for (let c = 0; c < COLUMNAS; c++) {
-      const x = origenX + c * celdaSize;
-      const y = origenY + f * celdaSize;
-      const celda = maze[f][c];
+  obstaculos.forEach((o) => {
+    // Actualizar rotación
+    o.angulo += o.velRotacion;
+    o.x1 = o.cx + Math.cos(o.angulo) * (o.largo / 2);
+    o.y1 = o.cy + Math.sin(o.angulo) * (o.largo / 2);
+    o.x2 = o.cx - Math.cos(o.angulo) * (o.largo / 2);
+    o.y2 = o.cy - Math.sin(o.angulo) * (o.largo / 2);
 
-      ctxMapa.beginPath();
-      if (celda.arriba) { ctxMapa.moveTo(x, y); ctxMapa.lineTo(x + celdaSize, y); }
-      if (celda.derecha) { ctxMapa.moveTo(x + celdaSize, y); ctxMapa.lineTo(x + celdaSize, y + celdaSize); }
-      if (celda.abajo) { ctxMapa.moveTo(x, y + celdaSize); ctxMapa.lineTo(x + celdaSize, y + celdaSize); }
-      if (celda.izquierda) { ctxMapa.moveTo(x, y); ctxMapa.lineTo(x, y + celdaSize); }
-      ctxMapa.stroke();
-    }
-  }
+    ctxMapa.beginPath();
+    ctxMapa.moveTo(o.x1, o.y1);
+    ctxMapa.lineTo(o.x2, o.y2);
+    ctxMapa.stroke();
+  });
 
-  // Meta: un pequeño marcador, oculto bajo la oscuridad hasta que la luz lo alcance
-  const centroMeta = celdaCentro(meta.f, meta.c);
+  // Dibujar meta oculta
   ctxMapa.fillStyle = colorAcento;
   ctxMapa.beginPath();
-  ctxMapa.arc(centroMeta.x, centroMeta.y, celdaSize * 0.15, 0, Math.PI * 2);
+  ctxMapa.arc(meta.x, meta.y, 10, 0, Math.PI * 2);
   ctxMapa.fill();
 }
 
-// --- Dibujo del token (la figura que el usuario mueve) ---
+// --- Dibujo del token ---
 function dibujarToken(ctx) {
-  const r = TAMAÑO_TOKEN / 2;
   ctx.fillStyle = colorPrimario;
   ctx.beginPath();
 
   if (token.tipo === 'circulo') {
-    ctx.arc(token.x, token.y, r, 0, Math.PI * 2);
+    ctx.arc(token.x, token.y, RADIO_TOKEN, 0, Math.PI * 2);
   } else if (token.tipo === 'triangulo') {
-    ctx.moveTo(token.x, token.y - r);
-    ctx.lineTo(token.x + r, token.y + r);
-    ctx.lineTo(token.x - r, token.y + r);
+    ctx.moveTo(token.x, token.y - RADIO_TOKEN);
+    ctx.lineTo(token.x + RADIO_TOKEN, token.y + RADIO_TOKEN);
+    ctx.lineTo(token.x - RADIO_TOKEN, token.y + RADIO_TOKEN);
     ctx.closePath();
   } else {
-    ctx.rect(token.x - r, token.y - r, r * 2, r * 2);
+    ctx.rect(token.x - RADIO_TOKEN, token.y - RADIO_TOKEN, RADIO_TOKEN * 2, RADIO_TOKEN * 2);
   }
   ctx.fill();
 }
 
-// --- Loop de renderizado: oscuridad total + agujero de luz alrededor del token ---
+// --- Loop de renderizado: oscuridad + agujero de luz + pulso de proximidad a la meta ---
 function dibujarFrame() {
   ctxOscuridad.globalCompositeOperation = 'source-over';
-  ctxOscuridad.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--color-fondo').trim() || '#0e0e10';
+  ctxOscuridad.fillStyle = colorFondo;
   ctxOscuridad.fillRect(0, 0, ancho, alto);
 
-  const gradiente = ctxOscuridad.createRadialGradient(token.x, token.y, 0, token.x, token.y, RADIO_LUZ);
+  // --- 1. LÓGICA DE VELOCIDAD Y RADIO DE LUZ ---
+  let radioObjetivo = RADIO_LUZ; // Radio por defecto (150)
+
+  // Solo castigamos si el usuario está interactuando
+  if (arrastrando) {
+    const dx = token.x - posAnteriorToken.x;
+    const dy = token.y - posAnteriorToken.y;
+    const velocidadFrame = Math.hypot(dx, dy);
+
+    // Valores súper agresivos
+    const UMBRAL_VELOCIDAD = 1; // Prácticamente cualquier movimiento rápido lo activa
+    const RADIO_MINIMO = 20;    // La luz se pega casi a la figura (que mide 13)
+
+    if (velocidadFrame > UMBRAL_VELOCIDAD) {
+      // Multiplicador gigante: apenás acelerás, el radio cae en picada
+      const reduccion = (velocidadFrame - UMBRAL_VELOCIDAD) * 20; 
+      radioObjetivo = Math.max(RADIO_MINIMO, RADIO_LUZ - reduccion);
+    }
+  }
+
+  // Guardamos la posición actual para compararla en el próximo frame
+  posAnteriorToken = { x: token.x, y: token.y };
+
+  // Interpolación diferenciada (Game Feel)
+  if (radioObjetivo < radioLuzVisual) {
+    // Si la luz se está achicando, lo hace súper rápido (0.4)
+    radioLuzVisual += (radioObjetivo - radioLuzVisual) * 0.4; 
+  } else {
+    // Si te quedás quieto y la luz se recupera, lo hace muy lento (0.02)
+    radioLuzVisual += (radioObjetivo - radioLuzVisual) * 0.02; 
+  }
+
+  //radioLuzVisual += (radioObjetivo - radioLuzVisual) * 0.15;
+  // ---------------------------------------------
+
+  // Pulso sutil: si la meta está cerca
+  const distanciaAMeta = Math.hypot(token.x - meta.x, token.y - meta.y);
+  const RADIO_INSINUACION = RADIO_LUZ * 2.5;
+  
+  // Verificamos usando el radioLuzVisual para que el pulso responda a la ceguera
+  if (distanciaAMeta > radioLuzVisual && distanciaAMeta < RADIO_INSINUACION) {
+    const cercania = 1 - (distanciaAMeta - radioLuzVisual) / (RADIO_INSINUACION - radioLuzVisual);
+    const pulso = (Math.sin(performance.now() / 300) + 1) / 2; // oscila entre 0 y 1
+    // Math.max evita valores negativos si hay un salto brusco
+    const opacidadInsinuacion = Math.max(0, cercania * pulso * 0.15); 
+
+    ctxOscuridad.globalCompositeOperation = 'destination-out';
+    ctxOscuridad.fillStyle = `rgba(0,0,0,${opacidadInsinuacion})`;
+    ctxOscuridad.beginPath();
+    ctxOscuridad.arc(meta.x, meta.y, 18, 0, Math.PI * 2);
+    ctxOscuridad.fill();
+  }
+
+  // Agujero de luz real alrededor del token (usando el tamaño dinámico)
+  const gradiente = ctxOscuridad.createRadialGradient(token.x, token.y, 0, token.x, token.y, radioLuzVisual);
   gradiente.addColorStop(0, 'rgba(0,0,0,1)');
   gradiente.addColorStop(1, 'rgba(0,0,0,0)');
 
   ctxOscuridad.globalCompositeOperation = 'destination-out';
   ctxOscuridad.fillStyle = gradiente;
   ctxOscuridad.beginPath();
-  ctxOscuridad.arc(token.x, token.y, RADIO_LUZ, 0, Math.PI * 2);
+  ctxOscuridad.arc(token.x, token.y, radioLuzVisual, 0, Math.PI * 2);
   ctxOscuridad.fill();
 
   ctxOscuridad.globalCompositeOperation = 'source-over';
@@ -158,131 +205,93 @@ function dibujarFrame() {
   requestAnimationFrame(dibujarFrame);
 }
 
-// --- Movimiento restringido por las paredes del laberinto ---
+// -- Modificá tu función moverToken(mx, my) --
 function moverToken(mx, my) {
-  const cObjetivo = Math.min(COLUMNAS - 1, Math.max(0, Math.floor((mx - origenX) / celdaSize)));
-  const fObjetivo = Math.min(FILAS - 1, Math.max(0, Math.floor((my - origenY) / celdaSize)));
+  // 1. Guardar posición actual antes del movimiento
+  const dx = mx - token.x;
+  const dy = my - token.y;
+  // 2. Calcular la distancia movida (velocidad instantánea)
+  velocidadActual = Math.hypot(dx, dy);
 
-  if (cObjetivo === token.c && fObjetivo === token.f) {
-    token.x = mx;
-    token.y = my;
-    return;
-  }
+  // (Aquí va tu código de movimiento libre con colisión existente...)
+  if (!colisionaConObstaculos(mx, token.y)) token.x = mx;
+  if (!colisionaConObstaculos(token.x, my)) token.y = my;
 
-  const df = fObjetivo - token.f;
-  const dc = cObjetivo - token.c;
-
-  // Solo se permite avanzar a una celda directamente adyacente, y solo si no hay pared en el medio
-  if (Math.abs(df) + Math.abs(dc) === 1) {
-    const celdaActual = maze[token.f][token.c];
-    let permitido = false;
-    if (df === -1 && !celdaActual.arriba) permitido = true;
-    if (df === 1 && !celdaActual.abajo) permitido = true;
-    if (dc === 1 && !celdaActual.derecha) permitido = true;
-    if (dc === -1 && !celdaActual.izquierda) permitido = true;
-
-    if (permitido) {
-      token.f = fObjetivo;
-      token.c = cObjetivo;
-      const centro = celdaCentro(fObjetivo, cObjetivo);
-      token.x = centro.x;
-      token.y = centro.y;
-      verificarMeta();
-    }
-    // si hay pared, el token no se mueve: choca y se queda donde estaba
-  }
+  verificarMeta();
 }
 
 function verificarMeta() {
-  if (token.f === meta.f && token.c === meta.c) {
-    setTimeout(siguienteRonda, 600); // pequeña pausa para que se note el hallazgo antes de regenerar
+  if (metaAlcanzada) return; // ya se está procesando la llegada, ignorar el resto de los movimientos
+
+  const distancia = Math.hypot(token.x - meta.x, token.y - meta.y);
+  if (distancia < RADIO_TOKEN + 12) {
+    metaAlcanzada = true;
+    setTimeout(siguienteRonda, 600);
   }
 }
 
 // --- Control de rondas ---
+function elegirPuntoLibre(evitar) {
+  let punto;
+  let intentos = 0;
+  do {
+    punto = {
+      x: MARGEN_BORDE + Math.random() * (ancho - MARGEN_BORDE * 2),
+      y: MARGEN_BORDE + Math.random() * (alto - MARGEN_BORDE * 2)
+    };
+    intentos++;
+  } while (
+    intentos < 100 &&
+    (colisionaConObstaculos(punto.x, punto.y) ||
+      (evitar && Math.hypot(punto.x - evitar.x, punto.y - evitar.y) < ancho * 0.35))
+  );
+  return punto;
+}
+
 function iniciarRonda() {
-  generarLaberinto();
-  const inicio = elegirCeldaAlAzar();
+  const inicio = { x: ancho / 2, y: alto / 2 };
+  generarObstaculos(inicio);
+  meta = elegirPuntoLibre(inicio);
 
-  // NUEVO: elegimos la meta entre las celdas más lejanas del inicio, midiendo el camino real
-  const distancias = calcularDistancias(inicio);
-  let distanciaMaxima = 0;
-  for (let f = 0; f < FILAS; f++) {
-    for (let c = 0; c < COLUMNAS; c++) {
-      if (distancias[f][c] > distanciaMaxima) distanciaMaxima = distancias[f][c];
-    }
-  }
-
-  const UMBRAL = 0.7; // la meta va a estar, como mínimo, al 70% del recorrido más largo posible
-  const candidatas = [];
-  for (let f = 0; f < FILAS; f++) {
-    for (let c = 0; c < COLUMNAS; c++) {
-      if (distancias[f][c] >= distanciaMaxima * UMBRAL) candidatas.push({ f, c });
-    }
-  }
-
-  meta = candidatas[Math.floor(Math.random() * candidatas.length)];
-
-  const centro = celdaCentro(inicio.f, inicio.c);
   token = {
-    f: inicio.f, c: inicio.c,
-    x: centro.x, y: centro.y,
+    x: inicio.x, y: inicio.y,
     tipo: TIPOS_TOKEN[Math.floor(Math.random() * TIPOS_TOKEN.length)]
   };
 
-  dibujarLaberinto();
-  document.getElementById('rondaActual').textContent = rondaActual;
+  metaAlcanzada = false; // NUEVO: se resetea al arrancar cada ronda
+  dibujarCampo();
 }
 
 function siguienteRonda() {
-  rondaActual++;
-  if (rondaActual > RONDAS_TOTALES) {
-    document.getElementById('info').textContent = 'Recorrido completo';
-    return;
-  }
+  rondaActual++; // sigue sumando indefinidamente, sin techo
   iniciarRonda();
 }
 
-// Agregar estas dos funciones nuevas
-
-function obtenerVecinosTransitables(f, c) {
-  const celda = maze[f][c];
-  const vecinos = [];
-  if (!celda.arriba && f > 0) vecinos.push({ f: f - 1, c });
-  if (!celda.derecha && c < COLUMNAS - 1) vecinos.push({ f, c: c + 1 });
-  if (!celda.abajo && f < FILAS - 1) vecinos.push({ f: f + 1, c });
-  if (!celda.izquierda && c > 0) vecinos.push({ f, c: c - 1 });
-  return vecinos;
-}
-
-function calcularDistancias(inicio) {
-  const dist = Array.from({ length: FILAS }, () => Array(COLUMNAS).fill(-1));
-  const cola = [inicio];
-  dist[inicio.f][inicio.c] = 0;
-
-  while (cola.length > 0) {
-    const actual = cola.shift();
-    obtenerVecinosTransitables(actual.f, actual.c).forEach((vecino) => {
-      if (dist[vecino.f][vecino.c] === -1) {
-        dist[vecino.f][vecino.c] = dist[actual.f][actual.c] + 1;
-        cola.push(vecino);
-      }
-    });
-  }
-  return dist;
-}
-
-// --- Interacción: tap o drag con mouse ---
-// Por esta:
+// --- Interacción: drag con mouse ---
 capaOscuridad.addEventListener('mousedown', (e) => {
-  e.preventDefault(); // NUEVO: bloquea el drag nativo del navegador antes de que arranque
-  arrastrando = true;
+  e.preventDefault();
+  const rect = capaOscuridad.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+
+  const distanciaAlToken = Math.hypot(mx - token.x, my - token.y);
+
+  // Solo arranca el drag si el clic fue realmente sobre la figura (con un margen chico de tolerancia)
+  if (distanciaAlToken <= RADIO_TOKEN + 10) {
+    arrastrando = true;
+    offsetAgarre.x = token.x - mx; // guarda dónde agarraste respecto al centro real
+    offsetAgarre.y = token.y - my;
+  }
 });
+
 document.addEventListener('mouseup', () => { arrastrando = false; });
+
 document.addEventListener('mousemove', (e) => {
   if (!arrastrando) return;
   const rect = capaOscuridad.getBoundingClientRect();
-  moverToken(e.clientX - rect.left, e.clientY - rect.top);
+  const mx = e.clientX - rect.left + offsetAgarre.x;
+  const my = e.clientY - rect.top + offsetAgarre.y;
+  moverToken(mx, my);
 });
 
 iniciarRonda();
