@@ -1,31 +1,39 @@
-/* Bloque-3/ansiedad/style.css */
+body {
+  transition: background-color 0.15s ease-out;
+}
+
 #canvas-ansiedad {
   position: relative;
   width: 100vw;
   height: 100vh;
   overflow: hidden;
+  touch-action: none; /* Crucial para evitar scroll en móviles/táctil */
 }
 
+/* El objetivo ahora es una zona más sutil, como una "sombra" de alivio */
 #zona-objetivo {
   position: absolute;
   width: 100px;
   height: 100px;
-  border: 1px dashed var(--color-borde);
-  border-radius: 8px;
+  background-color: var(--color-figura-secundaria);
+  opacity: 0.1; 
+  border-radius: 50%;
   pointer-events: none;
-  transition: border-color 0.2s;
+  transition: opacity 0.2s, transform 0.2s;
 }
 
 #zona-objetivo.activa {
-  border-color: var(--color-acento);
+  opacity: 0.4;
+  transform: scale(1.1);
+  background-color: var(--color-acento);
 }
 
 .obstaculo {
   position: absolute;
   background: var(--color-figura-secundaria);
-  opacity: 0.3;
-  border-radius: 4px;
+  opacity: 0.25;
   pointer-events: none;
+  transform-origin: center center;
 }
 
 #figura-ansiedad {
@@ -38,31 +46,56 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 48px;
+  font-size: 52px;
   color: var(--color-figura-primaria);
   touch-action: none;
-  z-index: 2;
-}
-
-#contador {
-  position: fixed;
-  top: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  color: var(--color-figura-secundaria);
-  font-size: 14px;
   z-index: 5;
 }
 
-/* style.css — agregar estas 3 clases nuevas */
-.obstaculo-circulo {
-  border-radius: 50%;
+.figura-ansiedad {
+  position: absolute;
+  width: 65px;
+  height: 65px;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-drag: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 52px;
+  color: var(--color-figura-primaria);
+  touch-action: none;
+  z-index: 5;
 }
 
-.obstaculo-triangulo {
-  clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+.figura-ansiedad:active {
+  cursor: grabbing;
 }
 
-.obstaculo-linea {
-  border-radius: 2px;
+/* Clases de formas geométricas abstractas */
+.obstaculo-circulo { border-radius: 50%; }
+.obstaculo-triangulo { clip-path: polygon(50% 0%, 0% 100%, 100% 100%); }
+.obstaculo-linea { border-radius: 2px; }
+.obstaculo-cuadrado { border-radius: 4px; }
+
+/* style.css - Agregá esto al final */
+.trauma-visual {
+  animation: trauma 0.4s cubic-bezier(.36,.07,.19,.97) both;
+  background-color: var(--color-acento) !important;
+}
+
+@keyframes trauma {
+  0%, 100% { transform: translate(0, 0); }
+  10%, 30%, 50%, 70%, 90% { transform: translate(-12px, 8px); }
+  20%, 40%, 60%, 80% { transform: translate(12px, -8px); }
+}
+
+.cicatriz-ansiedad {
+  position: absolute;
+  font-size: 52px;
+  color: var(--color-figura-secundaria);
+  opacity: 0.2;
+  pointer-events: none;
+  filter: blur(3px) grayscale(100%);
+  z-index: 1;
 }
