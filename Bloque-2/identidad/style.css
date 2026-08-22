@@ -1,0 +1,42 @@
+#canvas-empatia {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+#lienzo {
+  position: absolute;
+  top: 0;
+  left: 0;
+  -webkit-user-drag: none;
+  user-select: none;
+  touch-action: none;
+}
+
+#bandeja {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 24px;
+  z-index: 10;
+}
+
+.figura-arrastrable {
+  font-size: 40px;
+  color: var(--color-figura-primaria);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+#info {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  color: var(--color-figura-secundaria);
+  font-size: 14px;
+  z-index: 10;
+}
